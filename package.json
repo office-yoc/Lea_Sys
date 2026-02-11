@@ -24,7 +24,7 @@
     "react-dom": "^19.2.3",
     "next-intl": "^4.7.0",
     "@supabase/supabase-js": "^2.49.0",
-    "@supabase/ssr": "^0.6.0",
+    "@supabase/ssr": "^0.8.0",
     "@prisma/client": "^6.5.0",
     "@gorules/zen-engine": "^0.52.0",
     "json-rules-engine": "^7.3.0",
