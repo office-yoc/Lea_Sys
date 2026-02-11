@@ -37,7 +37,7 @@
     "jose": "^6.0.0"
   },
   "devDependencies": {
-    "@types/node": "^22",
+    "@types/node": "^25",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/nodemailer": "^7.0.9",
