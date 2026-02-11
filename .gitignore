@@ -1,0 +1,52 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Next.js
+.next/
+out/
+
+# Build
+dist/
+build/
+
+# Environment
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Generated rule engine files
+src/lib/rules/generated/
+
+# Prisma
+prisma/migrations/**/migration_lock.toml
+
+# Testing
+coverage/
+playwright-report/
+test-results/
+blob-report/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# Secrets — NEVER commit these
+*.pem
+*.key
+credentials.json

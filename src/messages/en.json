@@ -1,0 +1,15 @@
+{
+  "home": {
+    "title": "L.T.A Advisory Platform",
+    "description": "Cross-border tax advisory platform for Israel-Cyprus relocation planning"
+  },
+  "common": {
+    "login": "Sign In",
+    "logout": "Sign Out",
+    "dashboard": "Dashboard",
+    "cases": "Cases",
+    "clients": "Clients",
+    "documents": "Documents",
+    "settings": "Settings"
+  }
+}

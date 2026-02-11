@@ -1,0 +1,258 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ============================================
+// Core Entities
+// ============================================
+
+model Client {
+  id                  String   @id @default(cuid())
+  // PII fields — encrypted at application level
+  fullLegalName       String   @map("full_legal_name")
+  fullLegalNameHebrew String?  @map("full_legal_name_hebrew")
+  israeliId           String?  @map("israeli_id_encrypted")       // AES-256-GCM encrypted
+  passportNumber      String?  @map("passport_number_encrypted")  // AES-256-GCM encrypted
+  dateOfBirth         DateTime? @map("date_of_birth")
+  contactEmail        String   @map("contact_email")
+  contactPhone        String?  @map("contact_phone")
+  maritalStatus       String?  @map("marital_status")
+  nationalityPrimary  String?  @map("nationality_primary")
+
+  // Relationships
+  cases               Case[]
+  documents           Document[]
+  consentRecords      ConsentRecord[]
+
+  // Metadata
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  @@map("clients")
+}
+
+model Case {
+  id              String     @id @default(cuid())
+  clientId        String     @map("client_id")
+  client          Client     @relation(fields: [clientId], references: [id])
+  advisorId       String     @map("advisor_id")
+  advisor         Advisor    @relation(fields: [advisorId], references: [id])
+  status          CaseStatus @default(INTAKE)
+  serviceTrack    String?    @map("service_track")
+
+  // Advisory data
+  dataFields      CaseDataField[]
+  decisionRuns    DecisionRun[]
+  riskScores      RiskScore[]
+  financialRuns   FinancialRun[]
+  documents       Document[]
+
+  // Metadata
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  closedAt        DateTime? @map("closed_at")
+
+  @@map("cases")
+}
+
+enum CaseStatus {
+  INTAKE
+  DATA_COLLECTION
+  ANALYSIS
+  REVIEW
+  ADVISORY_DELIVERED
+  CLOSED
+}
+
+model Advisor {
+  id              String   @id @default(cuid())
+  email           String   @unique
+  name            String
+  role            AdvisorRole @default(ADVISOR)
+  mfaEnabled      Boolean  @default(false) @map("mfa_enabled")
+  cases           Case[]
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@map("advisors")
+}
+
+enum AdvisorRole {
+  ADMIN
+  SENIOR_ADVISOR
+  ADVISOR
+}
+
+// ============================================
+// Client Data Fields (117+ structured fields)
+// ============================================
+
+model CaseDataField {
+  id          String   @id @default(cuid())
+  caseId      String   @map("case_id")
+  case        Case     @relation(fields: [caseId], references: [id])
+  fieldId     String   @map("field_id")    // e.g., "DR-01-001"
+  value       Json     @map("field_value") // JSONB for flexibility
+  sensitivity String   @default("internal")
+  isEncrypted Boolean  @default(false) @map("is_encrypted")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  updatedBy   String   @map("updated_by")
+
+  @@unique([caseId, fieldId])
+  @@map("case_data_fields")
+}
+
+// ============================================
+// Rule Engine
+// ============================================
+
+model RuleDefinition {
+  id            String     @id                          // e.g., "LTF-01-001"
+  namespace     String                                  // LTF, DT, DR, RC, FA
+  version       Int        @default(1)
+  status        RuleStatus @default(DRAFT)
+  ruleJson      Json       @map("rule_json")            // Full rule definition
+  metadataJson  Json?      @map("metadata_json")        // Dependencies, expert info
+  createdAt     DateTime   @default(now()) @map("created_at")
+  updatedAt     DateTime   @updatedAt @map("updated_at")
+  lockedAt      DateTime?  @map("locked_at")
+  lockedBy      String?    @map("locked_by")
+
+  versions      RuleVersion[]
+
+  @@map("rule_definitions")
+}
+
+enum RuleStatus {
+  DRAFT
+  EXPERT_REVIEW
+  VERIFIED
+  LOCKED
+}
+
+model RuleVersion {
+  id          String   @id @default(cuid())
+  ruleId      String   @map("rule_id")
+  rule        RuleDefinition @relation(fields: [ruleId], references: [id])
+  version     Int
+  ruleJson    Json     @map("rule_json")
+  changedBy   String   @map("changed_by")
+  changedAt   DateTime @default(now()) @map("changed_at")
+  changeReason String? @map("change_reason")
+
+  @@map("rule_versions")
+}
+
+// ============================================
+// Decision Engine Results
+// ============================================
+
+model DecisionRun {
+  id              String   @id @default(cuid())
+  caseId          String   @map("case_id")
+  case            Case     @relation(fields: [caseId], references: [id])
+  treeId          String   @map("tree_id")           // e.g., "DT-01"
+  inputDataHash   String   @map("input_data_hash")
+  path            Json                                // Array of node IDs traversed
+  terminalState   String   @map("terminal_state")    // e.g., "ELIGIBLE-COMPLEX"
+  ruleVersionsUsed Json    @map("rule_versions_used") // Snapshot of rule versions
+  executionTimeMs Int      @map("execution_time_ms")
+  evaluatedAt     DateTime @default(now()) @map("evaluated_at")
+  evaluatedBy     String   @map("evaluated_by")
+
+  @@map("decision_runs")
+}
+
+model RiskScore {
+  id              String   @id @default(cuid())
+  caseId          String   @map("case_id")
+  case            Case     @relation(fields: [caseId], references: [id])
+  taxScore        Float    @map("tax_score")
+  legalScore      Float    @map("legal_score")
+  structuralScore Float    @map("structural_score")
+  financialScore  Float    @map("financial_score")
+  overallScore    Float    @map("overall_score")       // 0-100 normalized
+  tier            RiskTier
+  indicators      Json                                  // Active risk indicator details
+  evaluatedAt     DateTime @default(now()) @map("evaluated_at")
+
+  @@map("risk_scores")
+}
+
+enum RiskTier {
+  GREEN
+  YELLOW
+  ORANGE
+  RED
+}
+
+model FinancialRun {
+  id              String   @id @default(cuid())
+  caseId          String   @map("case_id")
+  case            Case     @relation(fields: [caseId], references: [id])
+  modelId         String   @map("model_id")           // e.g., "FA-04-001"
+  inputs          Json
+  outputs         Json
+  currency        String   @default("USD")
+  evaluatedAt     DateTime @default(now()) @map("evaluated_at")
+
+  @@map("financial_runs")
+}
+
+// ============================================
+// Documents
+// ============================================
+
+model Document {
+  id          String   @id @default(cuid())
+  clientId    String   @map("client_id")
+  client      Client   @relation(fields: [clientId], references: [id])
+  caseId      String?  @map("case_id")
+  case        Case?    @relation(fields: [caseId], references: [id])
+  fileName    String   @map("file_name")
+  fileType    String   @map("file_type")
+  storagePath String   @map("storage_path")           // Supabase Storage path
+  sizeBytes   Int      @map("size_bytes")
+  category    String                                   // passports, tax-returns, etc.
+  uploadedAt  DateTime @default(now()) @map("uploaded_at")
+  uploadedBy  String   @map("uploaded_by")
+
+  @@map("documents")
+}
+
+// ============================================
+// Compliance & Audit
+// ============================================
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  userId      String   @map("user_id")
+  action      String                                   // READ, WRITE, DELETE, EXPORT
+  resource    String                                   // Table/entity accessed
+  resourceId  String?  @map("resource_id")
+  details     Json?                                    // Additional context (sanitized)
+  ipAddress   String?  @map("ip_address")
+  timestamp   DateTime @default(now())
+
+  @@index([userId, timestamp])
+  @@index([resource, resourceId])
+  @@map("audit_log")
+}
+
+model ConsentRecord {
+  id          String   @id @default(cuid())
+  clientId    String   @map("client_id")
+  client      Client   @relation(fields: [clientId], references: [id])
+  consentType String   @map("consent_type")            // data_processing, marketing, etc.
+  granted     Boolean
+  grantedAt   DateTime @map("granted_at")
+  revokedAt   DateTime? @map("revoked_at")
+  ipAddress   String?  @map("ip_address")
+
+  @@map("consent_records")
+}
